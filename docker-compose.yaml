@@ -1,0 +1,50 @@
+version: '3.5'
+
+services:
+  bot-backend:
+    build:
+      context: bot-service
+      dockerfile: Dockerfile
+    volumes:
+      - ./bot-service/src:/bot-service/src
+    depends_on:
+      - mongo-db
+      - rabbitmq
+    env_file:
+      - .env
+    ports:
+      - ${BOT_APP_PORT}:${BOT_APP_PORT}
+  
+  support-backend:
+    build:
+      context: support-service
+      dockerfile: Dockerfile
+    volumes:
+      - ./support-service/src:/support-service/src
+    depends_on:
+      - mongo-db
+      - rabbitmq
+      - bot-backend
+    env_file:
+      - .env
+    ports:
+      - ${SUPPORT_APP_PORT}:${SUPPORT_APP_PORT}
+
+  mongo-db:
+    container_name: mongo-db
+    image: mongo
+    ports:
+      - "27018:27017"
+    volumes:
+      - ../db:/db
+
+  rabbitmq:
+    image: rabbitmq:3.10.7-management
+    hostname: rabbitmq
+    environment:
+      - "RABBITMQ_NODENAME=${RABBITMQ_NODENAME}"
+      - "RABBITMQ_DEFAULT_VHOST=${RABBITMQ_VHOST}"
+      - "RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}"
+      - "RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}"
+    ports:
+      - ${RABBITMQ_PORT}:${RABBITMQ_PORT}
