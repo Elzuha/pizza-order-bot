@@ -102,16 +102,21 @@ export type InteractionMessageSender = (
   message: SupportInteractionSentMessage
 ) => void;
 
-export interface DB {
-  createOrder: (order: IOrder) => Promise<void>;
-  getOrders: () => Promise<IOrder[]>;
-  getOrderById: (id: number) => Promise<IOrder | null>;
-  getLastOrderByConversationId: (conversationId: string) => Promise<IOrder>;
-  getAndUpdateOrder: (id: number, updateData: UpdateData) => Promise<IOrder>;
-  createUser: (user: IUser) => Promise<void>;
-  getUser: (params: GetUserParams) => Promise<IUser | null>;
-  createMessage: (message: IMessage) => Promise<void>;
-  getMessages: (orderId: number) => Promise<IMessage[]>;
+export abstract class DB {
+  public abstract createOrder(order: IOrder): Promise<void>;
+  public abstract getOrders(): Promise<IOrder[]>;
+  public abstract getOrderById(id: number): Promise<IOrder | null>;
+  public abstract getLastOrderByConversationId(
+    conversationId: string
+  ): Promise<IOrder>;
+  public abstract getAndUpdateOrder(
+    id: number,
+    updateData: UpdateData
+  ): Promise<IOrder>;
+  public abstract createUser(user: IUser): Promise<void>;
+  public abstract getUser(params: GetUserParams): Promise<IUser | null>;
+  public abstract createMessage(message: IMessage): Promise<void>;
+  public abstract getMessages(orderId: number): Promise<IMessage[]>;
 }
 
 export interface API {

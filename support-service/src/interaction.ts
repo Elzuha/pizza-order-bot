@@ -8,25 +8,20 @@ import {
   SupportInteraction,
   DB,
 } from "./types";
-import getDB from "./db";
+import { Database } from "./db";
+import {
+  AMPQ_CONNECT_URL,
+  ORDER_DATA_FIELDS,
+  RABBITMQ_QUEUE_FROM,
+  RABBITMQ_QUEUE_TO,
+} from "./config";
 
-const AMPQ_CONNECT_URL = process.env.AMPQ_CONNECT_URL || "";
-const orderDataFields = [
-  "name",
-  "size",
-  "dough",
-  "side",
-  "additions",
-  "address",
-  "comment",
-];
-const queueFrom = "toPizzaBotQueue",
-  queueTo = "fromPizzaBotQueue";
-let rabbitMQConnection: Connection, rabbitMQChannel: Channel;
 let db: DB;
 (async () => {
-  db = await getDB();
+  db = await Database.getInstance();
 })();
+let rabbitMQConnection: Connection, rabbitMQChannel: Channel;
+
 function parseMessage(msgContent: Buffer): SupportInteractionReceivedMessage {
   return JSON.parse(msgContent.toString("utf8"));
 }
@@ -45,7 +40,7 @@ async function messageHandler(message: SupportInteractionReceivedMessage) {
     };
     (Object.keys(ordersData) as (keyof IOrder["data"])[]).forEach(
       (fieldName) => {
-        const answerIndex = orderDataFields.indexOf(fieldName);
+        const answerIndex = ORDER_DATA_FIELDS.indexOf(fieldName);
         if (message.order) {
           if (
             fieldName == "size" &&
@@ -80,7 +75,7 @@ async function messageHandler(message: SupportInteractionReceivedMessage) {
   }
 }
 
-function consumer(msg: ConsumeMessage | null): void {
+function consume(msg: ConsumeMessage | null): void {
   if (msg) {
     let parsedMessage: SupportInteractionReceivedMessage | null = null;
     try {
@@ -96,23 +91,27 @@ function consumer(msg: ConsumeMessage | null): void {
 }
 
 function sendMessage(message: SupportInteractionSentMessage) {
-  rabbitMQChannel.assertQueue(queueFrom, {
+  rabbitMQChannel.assertQueue(RABBITMQ_QUEUE_FROM, {
     durable: true,
   });
 
-  rabbitMQChannel.sendToQueue(queueFrom, Buffer.from(JSON.stringify(message)), {
-    persistent: true,
-  });
+  rabbitMQChannel.sendToQueue(
+    RABBITMQ_QUEUE_FROM,
+    Buffer.from(JSON.stringify(message)),
+    {
+      persistent: true,
+    }
+  );
 }
 
 export async function SupportInteractionService(): Promise<SupportInteraction> {
   try {
     rabbitMQConnection = await client.connect(AMPQ_CONNECT_URL);
     rabbitMQChannel = await rabbitMQConnection.createChannel();
-    rabbitMQChannel.assertQueue(queueTo, {
+    rabbitMQChannel.assertQueue(RABBITMQ_QUEUE_TO, {
       durable: true,
     });
-    rabbitMQChannel.consume(queueTo, consumer);
+    rabbitMQChannel.consume(RABBITMQ_QUEUE_TO, consume);
   } catch (e) {
     console.log(e);
   }

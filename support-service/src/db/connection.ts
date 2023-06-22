@@ -1,6 +1,6 @@
 import mongoose, { ConnectOptions } from "mongoose";
 
-const MONGO_URL = process.env.MONGO_URL || "";
+import { MONGO_URL } from "../config";
 
 export function connectDB(): Promise<mongoose.Connection> {
   const options = {

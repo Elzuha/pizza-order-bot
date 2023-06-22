@@ -6,16 +6,17 @@ import {
   BotInteraction,
   BotMessageSender,
 } from "./types";
-
-const AMPQ_CONNECT_URL = process.env.AMPQ_CONNECT_URL || "";
-const statusUpdatedText = "Order's status updated! New status: ",
-  queueFrom = "fromPizzaBotQueue",
-  queueTo = "toPizzaBotQueue";
+import {
+  AMPQ_CONNECT_URL,
+  ORDER_STATUS_UPDATE_TEXT,
+  RABBITMQ_QUEUE_FROM,
+  RABBITMQ_QUEUE_TO,
+} from "./config";
 let rabbitMQConnection: Connection,
   rabbitMQChannel: Channel,
   sendBotMessage: BotMessageSender;
 
-function consumer(msg: ConsumeMessage | null): void {
+function consume(msg: ConsumeMessage | null): void {
   if (msg) {
     let parsedMessage: BotInteractionReceivedMessage | null = null;
     try {
@@ -31,11 +32,12 @@ function consumer(msg: ConsumeMessage | null): void {
 function setBotMessageSender(sender: BotMessageSender) {
   sendBotMessage = sender;
 }
+
 async function handleSupportServiceMessage(
   message: BotInteractionReceivedMessage
 ): Promise<void> {
   if (message.eventType == "orderStatusUpdated") {
-    const usersMessageText = statusUpdatedText + message.data;
+    const usersMessageText = ORDER_STATUS_UPDATE_TEXT + message.data;
     sendBotMessage(message.conversationId, usersMessageText);
   } else if (message.eventType == "messageRecieved") {
     sendBotMessage(message.conversationId, message.data);
@@ -47,23 +49,27 @@ function parseMessage(msgContent: Buffer): BotInteractionReceivedMessage {
 }
 
 function sendMessage(message: BotInteractionSentMessage) {
-  rabbitMQChannel.assertQueue(queueFrom, {
+  rabbitMQChannel.assertQueue(RABBITMQ_QUEUE_FROM, {
     durable: true,
   });
 
-  rabbitMQChannel.sendToQueue(queueFrom, Buffer.from(JSON.stringify(message)), {
-    persistent: true,
-  });
+  rabbitMQChannel.sendToQueue(
+    RABBITMQ_QUEUE_FROM,
+    Buffer.from(JSON.stringify(message)),
+    {
+      persistent: true,
+    }
+  );
 }
 
 export async function BotInteractionService(): Promise<BotInteraction> {
   try {
     rabbitMQConnection = await client.connect(AMPQ_CONNECT_URL);
     rabbitMQChannel = await rabbitMQConnection.createChannel();
-    rabbitMQChannel.assertQueue(queueTo, {
+    rabbitMQChannel.assertQueue(RABBITMQ_QUEUE_TO, {
       durable: true,
     });
-    rabbitMQChannel.consume(queueTo, consumer);
+    rabbitMQChannel.consume(RABBITMQ_QUEUE_TO, consume);
   } catch (e) {
     console.log(e);
   }

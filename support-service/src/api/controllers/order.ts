@@ -1,11 +1,11 @@
 import { NextFunction, Response } from "express";
 
 import { RequestWithToken, DB, InteractionMessageSender } from "../../types";
-import getDB from "../../db";
+import { Database } from "../../db";
 
 let db: DB;
 (async () => {
-  db = await getDB();
+  db = await Database.getInstance();
 })();
 
 export async function list(

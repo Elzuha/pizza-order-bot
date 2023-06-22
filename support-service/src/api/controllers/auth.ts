@@ -4,13 +4,13 @@ import crypto from "crypto";
 
 import { RequestWithToken, DB } from "../../types";
 import { PASSWORD_SECRET, JWT_SECRET, JWT_EXPIRATION_TIME } from "../../config";
-import getDB from "../../db";
+import { Database } from "../../db";
 
 let db: DB;
-let jwtBlacklist: string[] = [];
 (async () => {
-  db = await getDB();
+  db = await Database.getInstance();
 })();
+let jwtBlacklist: string[] = [];
 async function computeHash(input: string, salt: string): Promise<string> {
   return new Promise((resolve) =>
     crypto.scrypt(

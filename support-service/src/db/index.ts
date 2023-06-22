@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import { connectDB } from "./connection";
 import Order, { IOrderModel } from "./models/order.model";
 import User, { IUserModel } from "./models/user.model";
@@ -12,7 +11,6 @@ import {
   DB,
 } from "../types";
 
-let connection: mongoose.Connection;
 let lastOrderId = -1,
   lastUserId = -1,
   lastMessageId = -1;
@@ -47,94 +45,85 @@ let lastOrderId = -1,
   });
 })();
 
-async function createOrder(order: IOrder): Promise<void> {
-  lastOrderId++;
-  try {
-    Order.create({
-      id: lastOrderId,
-      ...order,
-    });
-  } catch (e) {}
-}
-
-async function getOrders(): Promise<IOrder[]> {
-  const orders = await Order.find({}, { _id: 0 }).exec();
-  return orders || [];
-}
-
-async function getOrderById(id: number): Promise<IOrder | null> {
-  const order = await Order.findOne({ id }, { _id: 0 }).exec();
-  return order;
-}
-
-async function getLastOrderByConversationId(
-  conversationId: string
-): Promise<IOrder> {
-  return new Promise((resolve) => {
-    Order.find({ "customer.id": conversationId })
-      .sort({ id: -1 })
-      .limit(1)
-      .exec((err: Error | null, orders: IOrder[]) => {
-        if (err) console.log("Error on updating order status" + err);
-        resolve(orders[0]);
+export class Database extends DB {
+  private static instance: Database;
+  public static async getInstance() {
+    console.log(!!Database.instance);
+    if (!Database.instance) {
+      await connectDB();
+      Database.instance = new Database();
+    }
+    return Database.instance;
+  }
+  private constructor() {
+    super();
+  }
+  public async createOrder(order: IOrder): Promise<void> {
+    lastOrderId++;
+    try {
+      await Order.create({
+        id: lastOrderId,
+        ...order,
       });
-  });
-}
-
-function getAndUpdateOrder(
-  id: number,
-  updateData: UpdateData
-): Promise<IOrder> {
-  return new Promise((resolve) => {
-    Order.findOneAndUpdate(
-      { id },
-      updateData,
-      { new: true, projection: { _id: 0 }, lean: true, upsert: true },
-      (err: Error | null, doc: IOrder) => {
-        if (err) console.log("Error on updating order status" + err);
-        resolve(doc);
-      }
-    );
-  });
-}
-
-async function createUser(user: IUser): Promise<void> {
-  lastUserId++;
-  User.create({
-    id: lastUserId,
-    ...user,
-  });
-}
-
-async function getUser(params: GetUserParams): Promise<IUser | null> {
-  const user = await User.findOne(params, { _id: 0 }).exec();
-  return user;
-}
-
-async function createMessage(message: IMessage): Promise<void> {
-  lastMessageId++;
-  Message.create({
-    id: lastMessageId,
-    ...message,
-  });
-}
-
-async function getMessages(orderId: number): Promise<IMessageModel[]> {
-  const messages = await Message.find({ orderId }, { _id: 0 }).exec();
-  return messages || [];
-}
-
-export default async function getDB(): Promise<DB> {
-  if (!connection) connection = await connectDB();
-  return {
-    createOrder,
-    getOrders,
-    getOrderById,
-    getLastOrderByConversationId,
-    getAndUpdateOrder,
-    createUser,
-    getUser,
-    createMessage,
-    getMessages,
-  };
+    } catch (e) {}
+  }
+  public async getOrders(): Promise<IOrder[]> {
+    const orders = await Order.find({}, { _id: 0 }).exec();
+    return orders || [];
+  }
+  public async getOrderById(id: number): Promise<IOrder | null> {
+    const order = await Order.findOne({ id }, { _id: 0 }).exec();
+    return order;
+  }
+  public async getLastOrderByConversationId(
+    conversationId: string
+  ): Promise<IOrder> {
+    return new Promise((resolve) => {
+      Order.find({ "customer.id": conversationId })
+        .sort({ id: -1 })
+        .limit(1)
+        .exec((err: Error | null, orders: IOrder[]) => {
+          if (err) console.log("Error on updating order status" + err);
+          resolve(orders[0]);
+        });
+    });
+  }
+  public getAndUpdateOrder(
+    id: number,
+    updateData: UpdateData
+  ): Promise<IOrder> {
+    return new Promise((resolve) => {
+      Order.findOneAndUpdate(
+        { id },
+        updateData,
+        { new: true, projection: { _id: 0 }, lean: true, upsert: true },
+        (err: Error | null, doc: IOrder) => {
+          if (err) console.log("Error on updating order status" + err);
+          resolve(doc);
+        }
+      );
+    });
+  }
+  public async createUser(user: IUser): Promise<void> {
+    lastUserId++;
+    User.create({
+      id: lastUserId,
+      ...user,
+    });
+  }
+  public async getUser(params: GetUserParams): Promise<IUser | null> {
+    const user = await User.findOne(params, { _id: 0 }).exec();
+    return user;
+  }
+  public async createMessage(message: IMessage): Promise<void> {
+    lastMessageId++;
+    Message.create({
+      id: lastMessageId,
+      ...message,
+    });
+  }
+  public async getMessages(orderId: number): Promise<IMessageModel[]> {
+    const messages = await Message.find({ orderId }, { _id: 0 }).exec();
+    return messages || [];
+  }
 }

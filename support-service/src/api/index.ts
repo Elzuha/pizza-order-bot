@@ -3,10 +3,9 @@ import { NextFunction, Request, Response } from "express";
 
 import { authController, orderController } from "./controllers/index";
 import { ResponseError, API, InteractionMessageSender } from "../types";
-import { JWT_BLACKLIST_MAINTAIN_PAUSE } from "../config";
+import { JWT_BLACKLIST_MAINTAIN_PAUSE, APP_PORT } from "../config";
 import { normalizeError } from "./formatting/errors";
 
-const APP_PORT = process.env.SUPPORT_APP_PORT;
 const app = express.default();
 const router = express.Router();
 let interactionMessageSender: InteractionMessageSender;
