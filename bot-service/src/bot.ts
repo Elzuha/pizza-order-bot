@@ -11,30 +11,28 @@ import {
   DB,
   InteractionMessageSender,
 } from "./types";
-import getDB from "./db";
+import { Database } from "./db";
+import {
+  SLACK_APP_TOKEN,
+  SLACK_SIGNIN_SECRET,
+  START_ORDER_TEXT,
+  ORDER_CREATED_TEXT,
+  QUESTIONS,
+  APP_PORT,
+} from "./config";
 
-const SLACK_APP_TOKEN = process.env.SLACK_APP_TOKEN;
-const SLACK_SIGNIN_SECRET = process.env.SLACK_SIGNIN_SECRET || "";
-const APP_PORT = process.env.BOT_APP_PORT || 3000;
+let db: DB;
+(async () => {
+  db = await Database.getInstance();
+})();
+const lastQuestionId = +Object.keys(QUESTIONS).reduce(
+  (previosValue: string, questionId: string) => {
+    return +questionId > +previosValue ? questionId : previosValue;
+  },
+  "0"
+);
 const conversationIdToLastQuestionId: { [key: string]: number } = {};
-const questions: { [key: string]: string } = {
-  "0": "Pizza name",
-  "1": "Size",
-  "2": "Dough Type",
-  "3": "Side Type",
-  "4": "Additions",
-  "5": "Delivery Address",
-  "6": "Order Comment",
-};
-const lastQuestionId = +Object.keys(questions).sort(
-  (keyA: string, keyB: string) => {
-    return +keyB - +keyA;
-  }
-)[0];
-const startOrderText = "Want to place an order? (yes/no)";
-const orderCreated = "Order created, preparation started!";
-const slackClient = new WebClient(SLACK_APP_TOKEN);
-const slackEvents = new SlackEventAdapter(SLACK_SIGNIN_SECRET);
+let sendInteractionMessage: InteractionMessageSender;
 const parseMessage: (event: MessagePayloadEvent) => {
   message: string;
   conversationId: string;
@@ -43,95 +41,9 @@ const parseMessage: (event: MessagePayloadEvent) => {
   const conversationId = event.user || event.channel || "";
   return { message, conversationId };
 };
-let sendInteractionMessage: InteractionMessageSender;
-let db: DB;
-(async () => {
-  db = await getDB();
-})();
+const slackClient = new WebClient(SLACK_APP_TOKEN);
+const slackEvents = new SlackEventAdapter(SLACK_SIGNIN_SECRET);
 
-async function sendMessage(conversationId: string, message: string) {
-  await slackClient.chat.postMessage({
-    text: message,
-    channel: conversationId,
-  });
-  if (["recieved", "canceled"].includes(message)) {
-    delete conversationIdToLastQuestionId[conversationId];
-    db.deleteAnswers(conversationId);
-  }
-}
-
-async function getCustomerData(conversationId: string) {
-  const identity: WebApi.UsersInfoResponse = await slackClient.users.info({
-    user: conversationId,
-  });
-  const username =
-    identity && identity.user && identity.user.name ? identity.user.name : "";
-  const avatarUrl =
-    identity && identity.user.profile && identity.user.profile.image_24
-      ? identity.user.profile.image_24
-      : "";
-  return {
-    username,
-    avatarUrl,
-  };
-}
-
-async function resumeChatOnRestart() {
-  const lastAnswers: IAnswer[] = await db.getLastAnswers();
-  for (const answer of lastAnswers) {
-    conversationIdToLastQuestionId[answer.conversationId] =
-      answer.questionId + 1;
-    if (answer.questionId == lastQuestionId) continue;
-    if (questions[answer.questionId + 1]) {
-      sendMessage(answer.conversationId, questions[answer.questionId + 1]);
-    }
-  }
-}
-
-async function messageHandler(conversationId: string, message: string) {
-  let answerMessage = "";
-  if (conversationIdToLastQuestionId[conversationId] > lastQuestionId) {
-    sendInteractionMessage({
-      eventType: "userMessage",
-      conversationId,
-      message,
-    });
-    answerMessage = "Your message resent to our manager!";
-    return;
-  } else if (
-    !conversationIdToLastQuestionId[conversationId] &&
-    conversationIdToLastQuestionId[conversationId] != 0 &&
-    message.toLowerCase() != "yes"
-  ) {
-    answerMessage = startOrderText;
-  } else if (
-    conversationIdToLastQuestionId[conversationId] == null &&
-    message.toLowerCase() == "yes"
-  ) {
-    conversationIdToLastQuestionId[conversationId] = 0;
-    answerMessage = questions[0];
-  } else {
-    await db.createAnswer({
-      conversationId,
-      message,
-      questionId: conversationIdToLastQuestionId[conversationId],
-    });
-    conversationIdToLastQuestionId[conversationId]++;
-    answerMessage = questions[conversationIdToLastQuestionId[conversationId]];
-    if (lastQuestionId < conversationIdToLastQuestionId[conversationId]) {
-      const customerData = await getCustomerData(conversationId);
-      const answers = await db.getAnswers(conversationId);
-      sendInteractionMessage({
-        eventType: "createOrder",
-        conversationId,
-        order: answers,
-        customerData,
-      });
-      answerMessage = orderCreated;
-    }
-  }
-  if (answerMessage) sendMessage(conversationId, answerMessage);
-}
 slackEvents.requestListener();
 slackEvents.on("error", (e) => {
   console.log(e);
@@ -169,10 +81,85 @@ app.post("/slack/events", (req, res) => {
   });
 })();
 
+async function sendMessage(conversationId: string, message: string) {
+  await slackClient.chat.postMessage({
+    text: message,
+    channel: conversationId,
+  });
+  if (["recieved", "canceled"].includes(message)) {
+    delete conversationIdToLastQuestionId[conversationId];
+    db.deleteAnswers(conversationId);
+  }
+}
+
+async function resumeChatOnRestart() {
+  const lastAnswers: IAnswer[] = await db.getLastAnswers();
+  for (const answer of lastAnswers) {
+    conversationIdToLastQuestionId[answer.conversationId] =
+      answer.questionId + 1;
+    if (answer.questionId == lastQuestionId) continue;
+    if (QUESTIONS[answer.questionId + 1]) {
+      sendMessage(answer.conversationId, QUESTIONS[answer.questionId + 1]);
+    }
+  }
+}
+
+async function getCustomerData(conversationId: string) {
+  const identity: WebApi.UsersInfoResponse = await slackClient.users.info({
+    user: conversationId,
+  });
+  const username =
+    identity && identity.user && identity.user.name ? identity.user.name : "";
+  const avatarUrl =
+    identity && identity.user.profile && identity.user.profile.image_72
+      ? identity.user.profile.image_72
+      : "";
+  return {
+    username,
+    avatarUrl,
+  };
+}
+
+async function messageHandler(conversationId: string, message: string) {
+  let answerMessage = "";
+  if (conversationIdToLastQuestionId[conversationId] > lastQuestionId) {
+    sendInteractionMessage({
+      eventType: "userMessage",
+      conversationId,
+      message,
+    });
+    return;
+  }
+  if (conversationIdToLastQuestionId[conversationId] == null) {
+    const startOrder = message.toLowerCase() == "yes";
+    answerMessage = startOrder ? QUESTIONS[0] : START_ORDER_TEXT;
+    if (startOrder) conversationIdToLastQuestionId[conversationId] = 0;
+  } else {
+    await db.createAnswer({
+      conversationId,
+      message,
+      questionId: conversationIdToLastQuestionId[conversationId],
+    });
+    conversationIdToLastQuestionId[conversationId]++;
+    answerMessage = QUESTIONS[conversationIdToLastQuestionId[conversationId]];
+    if (lastQuestionId < conversationIdToLastQuestionId[conversationId]) {
+      const customerData = await getCustomerData(conversationId);
+      const answers = await db.getAnswers(conversationId);
+      sendInteractionMessage({
+        eventType: "createOrder",
+        conversationId,
+        order: answers,
+        customerData,
+      });
+      answerMessage = ORDER_CREATED_TEXT;
+    }
+  }
+  if (answerMessage) sendMessage(conversationId, answerMessage);
+}
+
 export async function BotService(): Promise<Bot> {
   return {
     sendMessage,
-    getCustomerData,
     resumeChatOnRestart,
     setInteractionMessageSender: (sender: InteractionMessageSender) => {
       sendInteractionMessage = sender;

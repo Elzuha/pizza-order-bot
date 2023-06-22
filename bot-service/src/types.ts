@@ -57,7 +57,6 @@ export interface Bot {
     sender: (message: BotInteractionSentMessage) => void
   ) => void;
   sendMessage: BotMessageSender;
-  getCustomerData: (conversationId: string) => Promise<CustomerData>;
   resumeChatOnRestart: () => Promise<void>;
 }
 
@@ -66,9 +65,9 @@ export interface BotInteraction {
   sendMessage: (message: BotInteractionSentMessage) => void;
 }
 
-export interface DB {
-  createAnswer: (answer: IAnswer) => Promise<void>;
-  getAnswers: (conversationId: string) => Promise<IAnswer[]>;
-  getLastAnswers: () => Promise<IAnswer[]>;
-  deleteAnswers: (conversationId: string) => Promise<void>;
+export abstract class DB {
+  public abstract createAnswer(answer: IAnswer): Promise<void>;
+  public abstract getAnswers(conversationId: string): Promise<IAnswer[]>;
+  public abstract getLastAnswers(): Promise<IAnswer[]>;
+  public abstract deleteAnswers(conversationId: string): Promise<void>;
 }
